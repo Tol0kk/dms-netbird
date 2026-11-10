@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Common
 import qs.Services
+import qs.DCommon.Widgets
 import qs.Widgets
 import qs.Modules.Plugins
 
@@ -21,7 +22,6 @@ PluginComponent {
     property int pingCount: pluginData.pingCount !== undefined ? pluginData.pingCount : 5
     property string customTerminal: pluginData.terminalCommand || ""
     property bool colorizeIcon: pluginData.colorizeIcon !== undefined ? pluginData.colorizeIcon : true
-    property string adminConsoleUrl: pluginData.adminConsoleUrl || "https://app.netbird.io/"
     property string clientNamesSetting: (pluginData.clientNames || "").trim()
 
     function normalizePeerAction(value) {
@@ -117,13 +117,82 @@ PluginComponent {
         }
     }
 
-    // Disconnect every connected client; if none is connected, connect all
-    function toggleAll() {
-        var disconnecting = runningCount > 0;
-        for (var i = 0; i < clientRepeater.count; i++) {
-            var c = clientRepeater.itemAt(i);
-            if (c && c.netbirdRunning === disconnecting)
-                c.toggle();
+    function savePluginValue(key, value) {
+        if (pluginService)
+            pluginService.savePluginData(pluginId || "netbirdStatus", key, value);
+    }
+
+    // ── Selected client (shown in the popout / control center detail) ──
+    // Stored in pluginData so the bar popout and the control center stay in sync.
+    readonly property string selectedBin: pluginData.selectedClient || ""
+    readonly property var selectedClient: {
+        var items = clientItems;
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].bin === selectedBin)
+                return items[i];
+        }
+        return items.length > 0 ? items[0] : null;
+    }
+
+    function selectClient(bin) {
+        if (bin && bin !== selectedBin)
+            savePluginValue("selectedClient", bin);
+    }
+
+    function statusIcon(kind) {
+        switch (kind) {
+        case "connected":
+            return "vpn_lock";
+        case "checking":
+            return "sync";
+        case "error":
+            return "error";
+        default:
+            return "vpn_key_off";
+        }
+    }
+
+    function statusColor(kind) {
+        switch (kind) {
+        case "connected":
+            return Theme.primary;
+        case "error":
+            return Theme.error;
+        default:
+            return Theme.surfaceVariantText;
+        }
+    }
+
+    // Toggle for the whole plugin scope:
+    // - any client up   → take every connected client down and remember which ones were up
+    // - all clients down → bring the remembered ones back up (or the selected client if none remembered)
+    // Other clients are connected manually from the popout.
+    function toggleScope() {
+        var items = clientItems;
+        if (runningCount > 0) {
+            var wasUp = [];
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].netbirdRunning) {
+                    wasUp.push(items[i].bin);
+                    items[i].toggle();
+                }
+            }
+            savePluginValue("resumeClients", JSON.stringify(wasUp));
+            return;
+        }
+
+        var resume = [];
+        try {
+            resume = JSON.parse(pluginData.resumeClients || "[]");
+        } catch (e) {
+            resume = [];
+        }
+        var targets = items.filter(c => resume.indexOf(c.bin) >= 0);
+        if (targets.length === 0 && selectedClient)
+            targets = [selectedClient];
+        for (var j = 0; j < targets.length; j++) {
+            if (!targets[j].netbirdRunning)
+                targets[j].toggle();
         }
     }
 
@@ -138,7 +207,30 @@ PluginComponent {
             }
         }
         _cache[bin] = entry;
-        pluginService.savePluginData("netbirdStatus", "clientCache", JSON.stringify(_cache));
+        savePluginValue("clientCache", JSON.stringify(_cache));
+    }
+
+    // Client picker with a short status (icon + colour dot) per client; hidden with a single client.
+    // Inline components don't share the file's id scope, so the plugin root is passed in as `host`.
+    component ClientSelector: DDropdown {
+        id: selector
+        property var host: null
+        readonly property var items: host ? host.clientItems : []
+
+        compactMode: true
+        visible: items.length > 1
+        dropdownWidth: width
+        options: items.map(c => c.displayName)
+        optionValues: items.map(c => c.bin)
+        optionIcons: items.map(c => host.statusIcon(c.statusKind))
+        optionColorMap: {
+            var m = {};
+            for (var i = 0; i < items.length; i++)
+                m[items[i].bin] = host.statusColor(items[i].statusKind);
+            return m;
+        }
+        currentValue: host && host.selectedClient ? host.selectedClient.bin : ""
+        onValueChanged: value => selector.host.selectClient(value)
     }
 
     function notify(title, message) {
@@ -397,7 +489,7 @@ PluginComponent {
     property real _ccContentHeight: 250
     ccDetailHeight: _ccContentHeight
 
-    onCcWidgetToggled: root.toggleAll()
+    onCcWidgetToggled: root.toggleScope()
 
     ccDetailContent: Component {
         Rectangle {
@@ -421,13 +513,18 @@ PluginComponent {
                     horizontalAlignment: Text.AlignHCenter
                 }
 
+                ClientSelector {
+                    host: root
+                    width: ccDetailCol.width
+                }
+
                 Repeater {
-                    model: root.clientItems
+                    model: root.selectedClient ? [root.selectedClient] : []
                     delegate: NetbirdContent {
                         width: ccDetailCol.width
                         widget: modelData
                         compactHeader: true
-                        peersListMaxHeight: root.clientItems.length > 1 ? 90 : 130
+                        peersListMaxHeight: 130
                     }
                 }
             }
@@ -464,8 +561,13 @@ PluginComponent {
                     horizontalAlignment: Text.AlignHCenter
                 }
 
+                ClientSelector {
+                    host: root
+                    width: parent.width
+                }
+
                 Repeater {
-                    model: root.clientItems
+                    model: root.selectedClient ? [root.selectedClient] : []
                     delegate: NetbirdContent {
                         width: parent.width
                         widget: modelData

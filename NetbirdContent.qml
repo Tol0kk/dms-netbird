@@ -5,6 +5,7 @@ import Quickshell
 import qs.Common
 import qs.Services
 import qs.Widgets
+import qs.DCommon.Widgets as DC
 
 Column {
     id: contentRoot
@@ -63,27 +64,56 @@ Column {
                 height: contentRoot.compactHeader ? Theme.spacingXS : Theme.spacingS
             }
 
-            StyledText {
-                text: contentRoot.widget.netbirdIp
-                font.pixelSize: contentRoot.compactHeader ? 12 : Theme.fontSizeSmall
-                color: Theme.primary
-                visible: contentRoot.widget.showIpAddress && contentRoot.widget.netbirdRunning && contentRoot.widget.netbirdIp !== ""
+            // IP + copy button
+            RowLayout {
                 width: parent.width
+                spacing: Theme.spacingXS
+                visible: contentRoot.widget.netbirdRunning && contentRoot.widget.netbirdIp !== ""
 
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: contentRoot.widget.copyToClipboard(contentRoot.widget.netbirdIp)
+                StyledText {
+                    text: contentRoot.widget.netbirdIp
+                    font.pixelSize: contentRoot.compactHeader ? 12 : Theme.fontSizeSmall
+                    color: Theme.primary
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                DC.DActionButton {
+                    Layout.alignment: Qt.AlignVCenter
+                    buttonSize: Theme.buttonHeightXS
+                    iconSize: Theme.iconSizeSmall
+                    iconName: "content_copy"
+                    iconColor: Theme.surfaceVariantText
+                    tooltipText: "Copy IP"
+                    onClicked: contentRoot.widget.copyText(contentRoot.widget.netbirdIp, "IP")
                 }
             }
 
-            StyledText {
-                text: contentRoot.widget.netbirdFqdn
-                font.pixelSize: 12
-                color: Theme.surfaceVariantText
-                visible: !contentRoot.compactHeader && contentRoot.widget.netbirdRunning && contentRoot.widget.netbirdFqdn !== ""
+            // Domain + copy button
+            RowLayout {
                 width: parent.width
-                elide: Text.ElideRight
+                spacing: Theme.spacingXS
+                visible: contentRoot.widget.netbirdRunning && contentRoot.widget.netbirdFqdn !== ""
+
+                StyledText {
+                    text: contentRoot.widget.netbirdFqdn
+                    font.pixelSize: 12
+                    color: Theme.surfaceVariantText
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                DC.DActionButton {
+                    Layout.alignment: Qt.AlignVCenter
+                    buttonSize: Theme.buttonHeightXS
+                    iconSize: Theme.iconSizeSmall
+                    iconName: "content_copy"
+                    iconColor: Theme.surfaceVariantText
+                    tooltipText: "Copy domain"
+                    onClicked: contentRoot.widget.copyText(contentRoot.widget.netbirdFqdn, "Domain")
+                }
             }
 
             Item {
@@ -125,28 +155,6 @@ Column {
                         text: "Signal"
                         font.pixelSize: 12
                         color: Theme.surfaceVariantText
-                    }
-                }
-
-                RowLayout {
-                    visible: contentRoot.compactHeader && contentRoot.widget.netbirdFqdn !== ""
-                    spacing: 4
-                    Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignVCenter
-
-                    DankIcon {
-                        name: "language"
-                        size: 14
-                        color: Theme.surfaceVariantText
-                    }
-
-                    StyledText {
-                        text: contentRoot.widget.netbirdFqdn
-                        font.pixelSize: 12
-                        color: Theme.surfaceVariantText
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignVCenter
                     }
                 }
             }
@@ -401,16 +409,17 @@ Column {
             Layout.preferredHeight: 48
             text: contentRoot.widget.netbirdRunning ? "Disconnect" : "Connect"
 
+            // Connect: filled primary. Disconnect: dark surface with red text.
             contentItem: StyledText {
                 text: parent.text
-                color: parent.hovered ? Theme.surface : Theme.onPrimary
+                color: contentRoot.widget.netbirdRunning ? Theme.error : (parent.hovered ? Theme.surface : Theme.onPrimary)
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 font.weight: Font.Bold
             }
 
             background: Rectangle {
-                color: contentRoot.widget.netbirdRunning ? Theme.error : Theme.primary
+                color: contentRoot.widget.netbirdRunning ? Theme.surfaceContainerHighest : Theme.primary
                 radius: 24
                 opacity: parent.hovered ? 0.8 : 1.0
             }
@@ -422,7 +431,7 @@ Column {
             Layout.fillWidth: true
             Layout.preferredHeight: 48
             text: "Admin Console"
-            visible: contentRoot.widget.netbirdRunning
+            visible: contentRoot.widget.adminConsoleUrl !== ""
 
             contentItem: StyledText {
                 text: parent.text

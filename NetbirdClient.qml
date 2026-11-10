@@ -10,6 +10,7 @@ Item {
     property string bin: "netbird"
     // Name shown in the UI: "default" for netbird-default, "" for plain netbird
     readonly property string clientLabel: bin.indexOf("netbird-") === 0 ? bin.substring(8) : ""
+    readonly property string displayName: clientLabel !== "" ? clientLabel : bin
 
     visible: false
     width: 0
@@ -20,11 +21,16 @@ Item {
     readonly property bool colorizeIcon: host ? host.colorizeIcon : true
     readonly property bool showPing: host ? host.showPing : false
     readonly property bool hideDisconnected: host ? host.hideDisconnected : false
-    readonly property string adminConsoleUrl: host ? host.adminConsoleUrl : "https://app.netbird.io/"
     readonly property string defaultPeerAction: host ? host.defaultPeerAction : "copy-ip"
 
     function copyToClipboard(text) {
         host.copyToClipboard(text);
+    }
+    function copyText(text, what) {
+        if (!text)
+            return;
+        host.copyToClipboard(text);
+        host.notify(what + " copied", text);
     }
     function executePeerAction(action, peer) {
         host.executePeerAction(action, peer);
@@ -51,6 +57,29 @@ Item {
     property bool signalConnected: false
     property bool _restored: false
 
+    // Management URL reported by the daemon (e.g. https://api.netbird.example.org:443)
+    property string managementUrl: ""
+    // Dashboard = management host without port/path; NetBird cloud's API lives on api.netbird.io, its dashboard on app.netbird.io
+    readonly property string adminConsoleUrl: {
+        var m = managementUrl.match(/^(https?:\/\/)?([^\/:?#]+)/);
+        if (!m || !m[2])
+            return "";
+        if (m[2] === "api.netbird.io")
+            return "https://app.netbird.io/";
+        return (m[1] || "https://") + m[2];
+    }
+
+    // "checking" | "connected" | "disconnected" | "error"
+    readonly property string statusKind: {
+        if (netbirdStatus === "Checking...")
+            return "checking";
+        if (netbirdRunning)
+            return "connected";
+        if (netbirdStatus === "Disconnected")
+            return "disconnected";
+        return "error";
+    }
+
     property var peerPings: ({})
     property var pingQueue: []
     property string currentPingIp: ""
@@ -74,6 +103,7 @@ Item {
         netbirdFqdn = c.fqdn || "";
         peerCount = c.peerCount || 0;
         peerConnected = c.peerConnected || 0;
+        managementUrl = c.managementUrl || "";
         netbirdStatus = netbirdRunning ? "Connected" : "Disconnected";
         _restored = true;
     }
@@ -84,7 +114,8 @@ Item {
             "ip": netbirdIp,
             "fqdn": netbirdFqdn,
             "peerCount": peerCount,
-            "peerConnected": peerConnected
+            "peerConnected": peerConnected,
+            "managementUrl": managementUrl
         };
     }
 
@@ -121,9 +152,11 @@ Item {
     }
     function prunePeerOpenMap() {
         var updated = {};
-        for (var i = 0; i < sortedPeerList.length; i++) {
-            var key = getPeerKey(sortedPeerList[i]);
-            if (key && peerActionOpenMap[key])
+        var list = sortedPeerList || [];
+        var open = peerActionOpenMap || {};
+        for (var i = 0; i < list.length; i++) {
+            var key = getPeerKey(list[i]);
+            if (key && open[key])
                 updated[key] = true;
         }
         peerActionOpenMap = updated;
@@ -154,6 +187,8 @@ Item {
 
     // ── Status ──
     function refresh() {
+        if (statusProcess.running)
+            return;
         isRefreshing = true;
         statusProcess.command = [bin, "status", "--json"];
         statusProcess.running = true;
@@ -172,6 +207,7 @@ Item {
     Process {
         id: statusProcess
         stdout: StdioCollector {}
+        stderr: StdioCollector {}
 
         onExited: function (exitCode, exitStatus) {
             client.isRefreshing = false;
@@ -183,6 +219,8 @@ Item {
                     client.managementConnected = data.management?.connected ?? false;
                     client.signalConnected = data.signal?.connected ?? false;
                     client.netbirdRunning = client.managementConnected;
+                    if (data.management?.url)
+                        client.managementUrl = data.management.url;
 
                     if (client.netbirdRunning) {
                         client.netbirdIp = client.host.parseIp(data.netbirdIp || "");
@@ -218,7 +256,13 @@ Item {
                     client._setDisconnected("Error");
                 }
             } else {
-                client._setDisconnected("Disconnected");
+                var err = String(statusProcess.stderr.text || "");
+                if (/permission denied/i.test(err))
+                    client._setDisconnected("Permission denied");
+                else if (/failed to connect to daemon/i.test(err))
+                    client._setDisconnected("Daemon not running");
+                else
+                    client._setDisconnected("Disconnected");
             }
             client._restored = true;
             client.host.saveClientState(client.bin, client._cacheEntry());

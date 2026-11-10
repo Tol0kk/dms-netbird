@@ -51,8 +51,8 @@ PluginSettings {
 
             ToggleSetting {
                 settingKey: "showIpAddress"
-                label: "Show IP Address"
-                description: "Display NetBird IP in the bar widget"
+                label: "Show IP in Bar"
+                description: "Display the IP of each connected client next to the bar icon. The panel always shows the IP."
                 defaultValue: true
             }
 
@@ -271,17 +271,9 @@ PluginSettings {
             StringSetting {
                 settingKey: "clientNames"
                 label: "NetBird Clients"
-                description: "Comma-separated NixOS client names (e.g. default, pro → netbird-default, netbird-pro). Leave blank to auto-detect every netbird / netbird-<name> command in PATH."
+                description: "Comma-separated NixOS client names (e.g. default, pro → netbird-default, netbird-pro). Only these clients are shown and toggled. Leave blank to auto-detect every netbird / netbird-<name> command in PATH. The Admin Console button opens each client's own management server."
                 placeholder: "default, pro"
                 defaultValue: ""
-            }
-
-            StringSetting {
-                settingKey: "adminConsoleUrl"
-                label: "Admin Console URL"
-                description: "URL opened by the Admin Console button. Change this if you self-host NetBird."
-                placeholder: "https://app.netbird.io/"
-                defaultValue: "https://app.netbird.io/"
             }
 
             StyledText {
