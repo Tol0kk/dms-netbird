@@ -44,7 +44,7 @@ Column {
                     anchors.verticalCenter: parent.verticalCenter
 
                     StyledText {
-                        text: "NetBird Network"
+                        text: contentRoot.widget.clientLabel !== "" ? "NetBird · " + contentRoot.widget.clientLabel : "NetBird Network"
                         font.pixelSize: contentRoot.compactHeader ? Theme.fontSizeSmall : Theme.fontSizeMedium
                         font.weight: Font.Bold
                         color: Theme.surfaceText

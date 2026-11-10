@@ -269,6 +269,14 @@ PluginSettings {
             }
 
             StringSetting {
+                settingKey: "clientNames"
+                label: "NetBird Clients"
+                description: "Comma-separated NixOS client names (e.g. default, pro → netbird-default, netbird-pro). Leave blank to auto-detect every netbird / netbird-<name> command in PATH."
+                placeholder: "default, pro"
+                defaultValue: ""
+            }
+
+            StringSetting {
                 settingKey: "adminConsoleUrl"
                 label: "Admin Console URL"
                 description: "URL opened by the Admin Console button. Change this if you self-host NetBird."
